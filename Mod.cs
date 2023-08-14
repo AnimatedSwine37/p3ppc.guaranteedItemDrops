@@ -82,11 +82,11 @@ public unsafe class Mod : ModBase // <= Do not Remove.
     private short GetEnemyItemDrop(EnemyThing* info, uint* param_2)
     {
         var unitStats = (*_unitStats)[info->UnitId];
-        if (BitCheck(unitStats.QuestFlag))
+        if (_configuration.GuaranteeQuestDrops && BitCheck(unitStats.QuestFlag))
             return unitStats.QuestDrop.Item;
 
         var drop = _getDropHook.OriginalFunction(info, param_2);
-        if (drop != 0) return drop;
+        if (!_configuration.GuaranteeNormalDrops || drop != 0) return drop;
 
         var potential = &unitStats.ItemDrops;
         int numDrops = 0;
