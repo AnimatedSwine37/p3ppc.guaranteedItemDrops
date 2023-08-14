@@ -48,6 +48,7 @@ public unsafe class Mod : ModBase // <= Do not Remove.
     private UnitStats** _unitStats;
     private IHook<GetEnemyItemDropDelegate> _getDropHook;
     private Random _random = new Random();
+    private BitCheckDelegate BitCheck;
 
     public Mod(ModContext context)
     {
@@ -71,14 +72,23 @@ public unsafe class Mod : ModBase // <= Do not Remove.
             Utils.LogDebug($"Found UnitTbl at 0x{(nuint)_unitStats:X}");
         });
 
+        Utils.SigScan("40 53 48 83 EC 20 8B D9 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B C3 99", "BitCheck", (address) =>
+        {
+            BitCheck = _hooks.CreateWrapper<BitCheckDelegate>(address, out _);
+        });
+
     }
 
     private short GetEnemyItemDrop(EnemyThing* info, uint* param_2)
     {
+        var unitStats = (*_unitStats)[info->UnitId];
+        if (BitCheck(unitStats.QuestFlag))
+            return unitStats.QuestDrop.Item;
+
         var drop = _getDropHook.OriginalFunction(info, param_2);
         if (drop != 0) return drop;
 
-        var potential = &(*_unitStats)[info->UnitId].ItemDrops;
+        var potential = &unitStats.ItemDrops;
         int numDrops = 0;
         var drops = new short[4];
         
@@ -95,6 +105,8 @@ public unsafe class Mod : ModBase // <= Do not Remove.
 
     private delegate short GetEnemyItemDropDelegate(EnemyThing* param_1, uint* param_2);
 
+    private delegate bool BitCheckDelegate(int flag);
+
     [StructLayout(LayoutKind.Explicit)]
     struct EnemyThing
     {
@@ -107,6 +119,12 @@ public unsafe class Mod : ModBase // <= Do not Remove.
     {
         [FieldOffset(0x22)]
         internal UnitDrop ItemDrops;
+
+        [FieldOffset(0x32)]
+        internal short QuestFlag;
+
+        [FieldOffset(0x34)]
+        internal UnitDrop QuestDrop;
 
         // Just here to make sure the struct is the right length
         [FieldOffset(0x3c)]
